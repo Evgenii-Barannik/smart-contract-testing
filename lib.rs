@@ -9,14 +9,15 @@ mod flipper {
     #[ink(storage)]
     pub struct Flipper {
         /// Stores a single `bool` value on the storage.
-        value: bool,
+        value1: bool,
+        value2: bool,
     }
 
     impl Flipper {
         /// Constructor that initializes the `bool` value to the given `init_value`.
         #[ink(constructor)]
         pub fn new(init_value: bool) -> Self {
-            Self { value: init_value }
+            Self { value1: init_value, value2: init_value  }
         }
 
         /// Constructor that initializes the `bool` value to `false`.
@@ -32,13 +33,14 @@ mod flipper {
         /// to `false` and vice versa.
         #[ink(message)]
         pub fn flip(&mut self) {
-            self.value = !self.value;
+            self.value1 = !self.value1;
+            self.value2 = !self.value2;
         }
 
         /// Simply returns the current value of our `bool`.
         #[ink(message)]
-        pub fn get(&self) -> bool {
-            self.value
+        pub fn get(&self) -> (bool, bool) {
+            (self.value1, self.value2)
         }
     }
 
@@ -54,16 +56,16 @@ mod flipper {
         #[ink::test]
         fn default_works() {
             let flipper = Flipper::default();
-            assert_eq!(flipper.get(), false);
+            assert_eq!(flipper.get(), (false, false));
         }
 
         /// We test a simple use case of our contract.
         #[ink::test]
         fn it_works() {
             let mut flipper = Flipper::new(false);
-            assert_eq!(flipper.get(), false);
+            assert_eq!(flipper.get(), (false, false));
             flipper.flip();
-            assert_eq!(flipper.get(), true);
+            assert_eq!(flipper.get(), (true, true));
         }
     }
 
