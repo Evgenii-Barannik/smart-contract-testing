@@ -1,20 +1,25 @@
 [package]
-name = "flipper"
-version = "0.1.0"
-authors = ["[your_name] <[your_email]>"]
+name = "my_access_control"
+authors = ["Meguka"]
+version= "4.0.0-beta.1"
 edition = "2021"
 
 [dependencies]
-ink = { version = "4.2.0", default-features = false }
+ink = { version = "4.3.0", default-features = false}
 
 scale = { package = "parity-scale-codec", version = "3", default-features = false, features = ["derive"] }
 scale-info = { version = "2.6", default-features = false, features = ["derive"], optional = true }
 
+# These dependencies
+openbrush = { default-features = false, features = ["access_control", "psp34"] }
+
 [dev-dependencies]
-ink_e2e = "4.2.0"
+ink_e2e = "4.3.0"
 
 [lib]
+name = "my_access_control"
 path = "lib.rs"
+
 
 [features]
 default = ["std"]
@@ -22,6 +27,12 @@ std = [
     "ink/std",
     "scale/std",
     "scale-info/std",
+
+    # These dependencies
+    "openbrush/std",
 ]
 ink-as-dependency = []
 e2e-tests = []
+
+[profile.dev]
+codegen-units = 16

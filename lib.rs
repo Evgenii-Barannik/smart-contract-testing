@@ -1,160 +1,343 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 
-#[ink::contract]
-mod flipper {
+#[openbrush::implementation(PSP34, PSP34Burnable, PSP34Mintable, AccessControl)]
+#[openbrush::contract]
+pub mod my_access_control {
+    use openbrush::{
+        modifiers,
+        traits::Storage, contracts::access_control::RoleType,
+    };
 
-    /// Defines the storage of your contract.
-    /// Add new fields to the below struct in order
-    /// to add new static storage fields to your contract.
     #[ink(storage)]
-    pub struct Flipper {
-        /// Stores a single `bool` value on the storage.
-        value1: bool,
-        value2: bool,
+    #[derive(Default, Storage)]
+    pub struct Contract {
+        #[storage_field]
+        psp34: psp34::Data,
+        #[storage_field]
+        access: access_control::Data,
     }
 
-    impl Flipper {
-        /// Constructor that initializes the `bool` value to the given `init_value`.
+    // You can manually set the number for the role.
+    // But better to use a hash of the variable name.
+    // It will generate a unique identifier of this role.
+    // And will reduce the chance to have overlapping roles.
+    const MINTER: RoleType = ink::selector_id!("MINTER");
+    const USER: RoleType = ink::selector_id!("USER");
+
+    #[default_impl(PSP34Burnable)]
+    #[modifiers(only_role(USER))]
+    fn burn() {}
+
+    #[default_impl(PSP34Mintable)]
+    #[modifiers(only_role(MINTER))]
+    fn mint() {}
+
+    impl Contract {
         #[ink(constructor)]
-        pub fn new(init_value: bool) -> Self {
-            Self { value1: init_value, value2: init_value  }
-        }
+        pub fn new(_arg: bool) -> Self {
+            let mut instance = Self::default();
+            let caller = instance.env().caller();
 
-        /// Constructor that initializes the `bool` value to `false`.
-        ///
-        /// Constructors can delegate to other constructors.
-        #[ink(constructor)]
-        pub fn default() -> Self {
-            Self::new(Default::default())
-        }
-
-        /// A message that can be called on instantiated contracts.
-        /// This one flips the value of the stored `bool` from `true`
-        /// to `false` and vice versa.
-        #[ink(message)]
-        pub fn flip_all(&mut self) {
-            self.value1 = !self.value1;
-            self.value2 = !self.value2;
-        }
-        
-        #[ink(message)]
-        pub fn flip_first(&mut self) {
-            self.value1 = !self.value1;
-            self.value2 = self.value2;
+            access_control::Internal::_init_with_admin(&mut instance, Some(caller));
+            // We grant minter role to caller in constructor, so he can mint/burn tokens
+            AccessControl::grant_role(&mut instance, MINTER, Some(caller)).expect("Should grant MINTER role");
+            AccessControl::grant_role(&mut instance, USER, Some(caller)).expect("Should grant USER role");
+            
+            instance
         }
 
         #[ink(message)]
-        pub fn flip_second(&mut self) {
-            self.value1 = self.value1;
-            self.value2 = !self.value2;
-        }
-
-        /// Simply returns the current value of our `bool`.
-        #[ink(message)]
-        pub fn get(&self) -> (bool, bool) {
-            (self.value1, self.value2)
+        pub fn get(&self) -> bool {
+            true
         }
     }
 
-    // /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
-    // /// module and test functions are marked with a `#[test]` attribute.
-    // /// The below code is technically just normal Rust code.
-    // #[cfg(test)]
-    // mod tests {
-    //     /// Imports all the definitions from the outer scope so we can use them here.
-    //     use super::*;
-
-    //     /// We test if the default constructor does its job.
-    //     #[ink::test]
-    //     fn default_works() {
-    //         let flipper = Flipper::default();
-    //         assert_eq!(flipper.get(), (false, false));
-    //     }
-
-    //     /// We test a simple use case of our contract.
-    //     #[ink::test]
-    //     fn it_works() {
-    //         let mut flipper = Flipper::new(false);
-    //         assert_eq!(flipper.get(), (false, false));
-    //         flipper.flip_all();
-    //         assert_eq!(flipper.get(), (true, true));
-    //         flipper.flip_first();
-    //         assert_eq!(flipper.get(), (false, true));
-    //         flipper.flip_second();
-    //         assert_eq!(flipper.get(), (false, true));
-    //     }
-    // }
-
-
-    // /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    // ///
-    // /// When running these you need to make sure that you:
-    // /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    // /// - Are running a Substrate node which contains `pallet-contracts` in the background
     // #[cfg(all(test, feature = "e2e-tests"))]
-    // mod e2e_tests {
-    //     /// Imports all the definitions from the outer scope so we can use them here.
+    // pub mod tests {
+    //     use openbrush::contracts::{
+    //         access_control::accesscontrol_external::AccessControl,
+    //         psp34::{
+    //             extensions::{
+    //                 burnable::psp34burnable_external::PSP34Burnable,
+    //                 mintable::psp34mintable_external::PSP34Mintable,
+    //             },
+    //             psp34_external::PSP34,
+    //         },
+    //     };
+
+    //     #[rustfmt::skip]
     //     use super::*;
+    //     #[rustfmt::skip]
+    //     use ink_e2e::{build_message};
 
-    //     /// A helper function used for calling contract messages.
-    //     use ink_e2e::build_message;
+    //     use openbrush::contracts::access_control::DEFAULT_ADMIN_ROLE;
 
-    //     /// The End-to-End test `Result` type.
-    //     type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+    //     use test_helpers::{
+    //         address_of,
+    //         grant_role,
+    //         has_role,
+    //         mint,
+    //         mint_dry_run,
+    //         revoke_role,
+    //     };
 
-    //     /// We test that we can upload and instantiate the contract using its default constructor.
+    //     type E2EResult<T> = Result<T, Box<dyn std::error::Error>>;
+
     //     #[ink_e2e::test]
-    //     async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-    //         // Given
-    //         let constructor = FlipperRef::default();
-
-    //         // When
-    //         let contract_account_id = client
-    //             .instantiate("flipper", &ink_e2e::alice(), constructor, 0, None)
+    //     async fn only_minter_role_is_allowed_to_mint(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
     //             .await
     //             .expect("instantiate failed")
     //             .account_id;
 
-    //         // Then
-    //         let get = build_message::<FlipperRef>(contract_account_id.clone())
-    //             .call(|flipper| flipper.get());
-    //         let get_result = client.call_dry_run(&ink_e2e::alice(), &get, 0, None).await;
-    //         assert!(matches!(get_result.return_value(), false));
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+
+    //         assert!(matches!(mint_dry_run!(client, address, bob, Bob, Id::U8(0)), Err(_)));
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+
+    //         assert_eq!(mint!(client, address, bob, Bob, Id::U8(0)), Ok(()));
+
+    //         let owner_of = {
+    //             let _msg = build_message::<ContractRef>(address.clone()).call(|contract| contract.owner_of(Id::U8(0)));
+    //             client.call_dry_run(&ink_e2e::alice(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert_eq!(owner_of, Some(address_of!(Bob)));
 
     //         Ok(())
     //     }
 
-        // /// We test that we can read and write a value from the on-chain contract contract.
-        // #[ink_e2e::test]
-        // async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-        //     // Given
-        //     let constructor = FlipperRef::new(false);
-        //     let contract_account_id = client
-        //         .instantiate("flipper", &ink_e2e::bob(), constructor, 0, None)
-        //         .await
-        //         .expect("instantiate failed")
-        //         .account_id;
+    //     #[ink_e2e::test]
+    //     async fn should_grant_initial_roles_to_default_signer(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
 
-        //     let get = build_message::<FlipperRef>(contract_account_id.clone())
-        //         .call(|flipper| flipper.get());
-        //     let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-        //     assert!(matches!(get_result.return_value(), false));
+    //         assert_eq!(has_role!(client, address, MINTER, Alice), true);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Alice), true);
 
-        //     // When
-        //     let flip_all = build_message::<FlipperRef>(contract_account_id.clone())
-        //         .call(|flipper| flipper.flip_all());
-        //     let _flip_result = client
-        //         .call(&ink_e2e::bob(), flip_all, 0, None)
-        //         .await
-        //         .expect("flip failed");
+    //         Ok(())
+    //     }
 
-        //     // Then
-        //     let get = build_message::<FlipperRef>(contract_account_id.clone())
-        //         .call(|flipper| flipper.get());
-        //     let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-        //     assert!(matches!(get_result.return_value(), true));
+    //     #[ink_e2e::test]
+    //     async fn should_not_grant_initial_roles_for_random_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
 
-        //     Ok(())
-        // }
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Bob), false);
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_grant_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_not_change_old_roles_after_grant_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Bob), false);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Alice), true);
+    //         assert_eq!(has_role!(client, address, MINTER, Alice), true);
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Bob), false);
+    //         assert_eq!(has_role!(client, address, DEFAULT_ADMIN_ROLE, Alice), true);
+    //         assert_eq!(has_role!(client, address, MINTER, Alice), true);
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_revoke_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+
+    //         let revoke_role = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.revoke_role(MINTER, Some(address_of!(Bob))));
+    //             client
+    //                 .call(&ink_e2e::alice(), _msg, 0, None)
+    //                 .await
+    //                 .expect("call failed")
+    //         }
+    //         .return_value();
+
+    //         assert_eq!(revoke_role, Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_renounce_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(has_role!(client, address, MINTER, Alice), true);
+
+    //         let renounce_role = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.renounce_role(MINTER, Some(address_of!(Alice))));
+    //             client
+    //                 .call(&ink_e2e::alice(), _msg, 0, None)
+    //                 .await
+    //                 .expect("call failed")
+    //         }
+    //         .return_value();
+
+    //         assert_eq!(renounce_role, Ok(()));
+
+    //         assert_eq!(has_role!(client, address, MINTER, Alice), false);
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_reject_when_grant_or_revoke_not_by_admin_role(
+    //         mut client: ink_e2e::Client<C, E>,
+    //     ) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+
+    //         let grant_role = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.grant_role(MINTER, Some(address_of!(Charlie))));
+    //             client.call_dry_run(&ink_e2e::bob(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert!(matches!(grant_role, Err(_)));
+
+    //         let revoke_role = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.revoke_role(MINTER, Some(address_of!(Charlie))));
+    //             client.call_dry_run(&ink_e2e::bob(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert!(matches!(revoke_role, Err(_)));
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_reject_when_renounce_not_self_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+
+    //         let renounce_role = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.renounce_role(MINTER, Some(address_of!(Bob))));
+    //             client.call_dry_run(&ink_e2e::alice(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert!(matches!(renounce_role, Err(_)));
+
+    //         Ok(())
+    //     }
+
+    //     #[ink_e2e::test]
+    //     async fn should_reject_burn_if_no_minter_role(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+    //         let constructor = ContractRef::new();
+    //         let address = client
+    //             .instantiate("my_access_control", &ink_e2e::alice(), constructor, 0, None)
+    //             .await
+    //             .expect("instantiate failed")
+    //             .account_id;
+
+    //         assert_eq!(grant_role!(client, address, MINTER, Bob), Ok(()));
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), true);
+
+    //         assert_eq!(mint!(client, address, bob, Bob, Id::U8(0)), Ok(()));
+
+    //         let owner_of = {
+    //             let _msg = build_message::<ContractRef>(address.clone()).call(|contract| contract.owner_of(Id::U8(0)));
+    //             client.call_dry_run(&ink_e2e::bob(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert_eq!(owner_of, Some(address_of!(Bob)));
+
+    //         assert_eq!(revoke_role!(client, address, MINTER, Bob), Ok(()));
+    //         assert_eq!(has_role!(client, address, MINTER, Bob), false);
+
+    //         let burn = {
+    //             let _msg = build_message::<ContractRef>(address.clone())
+    //                 .call(|contract| contract.burn(address_of!(Bob), Id::U8(0)));
+    //             client.call_dry_run(&ink_e2e::bob(), &_msg, 0, None).await
+    //         }
+    //         .return_value();
+
+    //         assert!(matches!(burn, Err(_)));
+
+    //         Ok(())
+    //     }
     // }
 }
