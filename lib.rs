@@ -22,11 +22,7 @@ pub mod my_access_control {
     impl Contract {
         #[ink(constructor)]
         pub fn new(_arg: bool) -> Self {
-            let mut instance = Self::default();
-            let caller = instance.env().caller();
-            access_control::Internal::_init_with_admin(&mut instance, Some(caller));
-
-            instance
+            Self::default()
         }
 
         #[ink(message)]
